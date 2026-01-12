@@ -14,7 +14,6 @@ const DragAndDrop = ({ data: intialData }) => {
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
-  const currentColumn = useRef(null); // ✅ NEW
 
   function handleStartDrag(e, task, heading, idx) {
     e.target.style.opacity = 0.6;
@@ -27,20 +26,16 @@ const DragAndDrop = ({ data: intialData }) => {
     e.target.style.transform = "none";
   }
 
-  function handleDragEnter(_, idx, heading) {
+  function handleDragOverTask(_, idx, heading) {
     dragOverItem.current = { idx, heading };
   }
 
-  function handleColumnEnter(heading) {
-    currentColumn.current = heading;
+  function handleDragOverList(e, heading) {
+    e.preventDefault(); // 🔥 REQUIRED
     dragOverItem.current = {
       heading,
-      idx: data[heading].length, // 👈 drop to end if empty
+      idx: data[heading].length, // 👈 works for empty & bottom
     };
-  }
-
-  function handleDragOver(e) {
-    e.preventDefault();
   }
 
   function handleDrop() {
@@ -49,27 +44,21 @@ const DragAndDrop = ({ data: intialData }) => {
 
     if (!source || !dest) return;
 
-    setData((pre) => {
-      const destinationIndex =
-        typeof dest.idx === "number" ? dest.idx : pre[dest.heading].length;
+    setData((prev) => {
+      const destinationIndex = dest.idx;
 
       if (source.heading === dest.heading) {
-        const list = [...pre[source.heading]];
+        const list = [...prev[source.heading]];
         const [removed] = list.splice(source.idx, 1);
         list.splice(destinationIndex, 0, removed);
-
-        return {
-          ...pre,
-          [source.heading]: list,
-        };
+        return { ...prev, [source.heading]: list };
       } else {
-        const sourceList = [...pre[source.heading]];
-        const destList = [...pre[dest.heading]];
+        const sourceList = [...prev[source.heading]];
+        const destList = [...prev[dest.heading]];
         const [removed] = sourceList.splice(source.idx, 1);
         destList.splice(destinationIndex, 0, removed);
-
         return {
-          ...pre,
+          ...prev,
           [source.heading]: sourceList,
           [dest.heading]: destList,
         };
@@ -78,138 +67,104 @@ const DragAndDrop = ({ data: intialData }) => {
 
     dragItem.current = null;
     dragOverItem.current = null;
-    currentColumn.current = null;
   }
 
-  const columnColors = {
-    BACKLOG: "#38bdf8",
-    IN_PROGRESS: "#facc15",
-    REVIEW: "#a78bfa",
-    DONE: "#22c55e",
-  };
-
   return (
-    <>
-      <style>{globalStyles}</style>
-
-      <div style={style.root}>
-        {mainHeadings.map((heading) => (
-          <div
-            key={heading}
-            style={{
-              ...style.column,
-              borderTop: `4px solid ${columnColors[heading]}`,
-            }}
-            onDragOver={handleDragOver}
-            onDragEnter={() => handleColumnEnter(heading)} // ✅ KEY FIX
-            onDrop={handleDrop}
-          >
-            <div style={style.columnHeader}>
-              {heading.replace("_", " ")}
-              <span style={style.count}>{data[heading].length}</span>
-            </div>
-
-            <div style={style.taskList}>
-              {data[heading].map((task, idx) => (
-                <div
-                  key={task.id}
-                  draggable
-                  style={{ ...style.task, ...popAnimation }}
-                  onDragStart={(e) => handleStartDrag(e, task, heading, idx)}
-                  onDragEnd={handleDragEnd}
-                  onDragEnter={() => handleDragEnter(null, idx, heading)}
-                >
-                  <p style={style.taskTitle}>{task.title}</p>
-                  <span style={style.taskTag}>TASK</span>
-                </div>
-              ))}
-            </div>
+    <div style={style.root}>
+      {mainHeadings.map((heading) => (
+        <div key={heading} style={style.column} onDrop={handleDrop}>
+          <div style={style.columnHeader}>
+            {heading.replace("_", " ")}
+            <span style={style.count}>{data[heading].length}</span>
           </div>
-        ))}
-      </div>
-    </>
+
+          {/* 🔥 THIS IS THE KEY FIX */}
+          <div
+            style={style.taskList}
+            onDragOver={(e) => handleDragOverList(e, heading)}
+          >
+            {data[heading].map((task, idx) => (
+              <div
+                key={task.id}
+                draggable
+                style={style.task}
+                onDragStart={(e) => handleStartDrag(e, task, heading, idx)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOverTask(e, idx, heading)}
+              >
+                <p style={style.taskTitle}>{task.title}</p>
+              </div>
+            ))}
+
+            {/* empty-state drop zone */}
+            {data[heading].length === 0 && (
+              <div style={style.emptyHint}>Drop tasks here</div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 };
 
 export default DragAndDrop;
 
-/* ================= Animations ================= */
-
-const popAnimation = {
-  animation: "popIn 0.35s ease forwards",
-};
-
-const globalStyles = `
-@keyframes popIn {
-  0% { transform: scale(0.9); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-`;
-
 /* ================= Styles ================= */
 
 const style = {
   root: {
-    minHeight: "calc(100vh - 120px)",
+    minHeight: "100vh",
     display: "flex",
     gap: "24px",
     padding: "32px",
-    background: "linear-gradient(135deg, #0f172a, #020617)",
+    background: "#020617",
   },
 
   column: {
     flex: 1,
     background: "rgba(255,255,255,0.07)",
-    backdropFilter: "blur(18px)",
     borderRadius: "18px",
     padding: "16px",
-    boxShadow: "0 20px 40px rgba(0,0,0,0.45)",
   },
 
   columnHeader: {
     display: "flex",
     justifyContent: "space-between",
     color: "#e5e7eb",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    paddingBottom: "12px",
-    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    marginBottom: "12px",
   },
 
   count: {
-    background: "rgba(255,215,0,0.15)",
-    color: "#FFD700",
+    background: "#1f2937",
     padding: "2px 10px",
     borderRadius: "999px",
-    fontSize: "0.7rem",
   },
 
   taskList: {
-    marginTop: "16px",
+    minHeight: "80px", // 🔥 MUST EXIST
     display: "flex",
     flexDirection: "column",
     gap: "12px",
-    minHeight: "60px", // ✅ ensures empty column is droppable
   },
 
   task: {
-    background: "linear-gradient(145deg, #111827, #020617)",
-    borderRadius: "14px",
-    padding: "14px",
+    background: "#111827",
+    borderRadius: "12px",
+    padding: "12px",
     cursor: "grab",
-    boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+    color: "#f9fafb",
   },
 
   taskTitle: {
-    color: "#f9fafb",
     fontSize: "0.9rem",
   },
 
-  taskTag: {
-    fontSize: "0.7rem",
-    color: "#fff",
-    background: "linear-gradient(90deg, #38bdf8, #6366f1)",
-    padding: "2px 10px",
-    borderRadius: "999px",
+  emptyHint: {
+    color: "#64748b",
+    fontSize: "0.8rem",
+    textAlign: "center",
+    padding: "16px",
+    border: "1px dashed rgba(255,255,255,0.15)",
+    borderRadius: "12px",
   },
 };

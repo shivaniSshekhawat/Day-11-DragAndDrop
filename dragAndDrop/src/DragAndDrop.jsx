@@ -12,8 +12,8 @@ const DragAndDrop = ({ data: intialData }) => {
 
   const mainHeadings = Object.keys(data);
 
-  const dragItem = useRef();
-  const dragOverItem = useRef();
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
 
   function handleStartDrag(e, task, heading, idx) {
     e.target.style.opacity = 0.6;
@@ -26,7 +26,7 @@ const DragAndDrop = ({ data: intialData }) => {
     e.target.style.transform = "none";
   }
 
-  function handleDragEnter(e, idx, heading) {
+  function handleDragEnter(_, idx, heading) {
     dragOverItem.current = { idx, heading };
   }
 
@@ -40,16 +40,24 @@ const DragAndDrop = ({ data: intialData }) => {
     if (!source || !dest) return;
 
     setData((pre) => {
+      const destinationIndex =
+        typeof dest.idx === "number" ? dest.idx : pre[dest.heading].length;
+
       if (source.heading === dest.heading) {
         const list = [...pre[source.heading]];
         const [removed] = list.splice(source.idx, 1);
-        list.splice(dest.idx, 0, removed);
-        return { ...pre, [source.heading]: list };
+        list.splice(destinationIndex, 0, removed);
+
+        return {
+          ...pre,
+          [source.heading]: list,
+        };
       } else {
         const sourceList = [...pre[source.heading]];
         const destList = [...pre[dest.heading]];
         const [removed] = sourceList.splice(source.idx, 1);
-        destList.splice(dest.idx, 0, removed);
+        destList.splice(destinationIndex, 0, removed);
+
         return {
           ...pre,
           [source.heading]: sourceList,
@@ -89,7 +97,17 @@ const DragAndDrop = ({ data: intialData }) => {
               <span style={style.count}>{data[heading].length}</span>
             </div>
 
-            <div style={style.taskList}>
+            {/* 👇 THIS IS THE KEY FIX */}
+            <div
+              style={style.taskList}
+              onDragEnter={() =>
+                handleDragEnter(
+                  null,
+                  data[heading].length, // allows empty & bottom drop
+                  heading
+                )
+              }
+            >
               {data[heading].map((task, idx) => (
                 <div
                   key={task.id}
@@ -97,7 +115,7 @@ const DragAndDrop = ({ data: intialData }) => {
                   style={{ ...style.task, ...popAnimation }}
                   onDragStart={(e) => handleStartDrag(e, task, heading, idx)}
                   onDragEnd={handleDragEnd}
-                  onDragEnter={(e) => handleDragEnter(e, idx, heading)}
+                  onDragEnter={() => handleDragEnter(null, idx, heading)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform =
                       "translateY(-3px) scale(1.02)";
@@ -189,6 +207,7 @@ const style = {
     display: "flex",
     flexDirection: "column",
     gap: "12px",
+    minHeight: "40px", // 👈 allows dropping into empty column
   },
 
   task: {

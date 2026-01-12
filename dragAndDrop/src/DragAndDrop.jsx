@@ -10,32 +10,30 @@ const DragAndDrop = ({ data: intialData }) => {
     localStorage.setItem("tasks-data", JSON.stringify(data));
   }, [data]);
 
-  const mainHeadings = Object.keys(data);
-
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
 
   function handleStartDrag(e, task, heading, idx) {
-    e.target.style.opacity = 0.6;
-    e.target.style.transform = "rotate(2deg) scale(1.05)";
     dragItem.current = { task, heading, idx };
+    e.target.style.opacity = 0.6;
   }
 
   function handleDragEnd(e) {
     e.target.style.opacity = 1;
-    e.target.style.transform = "none";
   }
 
-  function handleDragOverTask(_, idx, heading) {
-    dragOverItem.current = { idx, heading };
-  }
-
-  function handleDragOverList(e, heading) {
-    e.preventDefault(); // 🔥 REQUIRED
+  // 🔥 THIS IS THE KEY FIX
+  function handleListDragOver(e, heading) {
+    e.preventDefault(); // REQUIRED FOR DROP
     dragOverItem.current = {
       heading,
-      idx: data[heading].length, // 👈 works for empty & bottom
+      idx: data[heading].length, // 0 if empty, bottom if not
     };
+  }
+
+  function handleTaskDragOver(e, heading, idx) {
+    e.preventDefault();
+    dragOverItem.current = { heading, idx };
   }
 
   function handleDrop() {
@@ -45,24 +43,17 @@ const DragAndDrop = ({ data: intialData }) => {
     if (!source || !dest) return;
 
     setData((prev) => {
-      const destinationIndex = dest.idx;
+      const sourceList = [...prev[source.heading]];
+      const destList = [...prev[dest.heading]];
 
-      if (source.heading === dest.heading) {
-        const list = [...prev[source.heading]];
-        const [removed] = list.splice(source.idx, 1);
-        list.splice(destinationIndex, 0, removed);
-        return { ...prev, [source.heading]: list };
-      } else {
-        const sourceList = [...prev[source.heading]];
-        const destList = [...prev[dest.heading]];
-        const [removed] = sourceList.splice(source.idx, 1);
-        destList.splice(destinationIndex, 0, removed);
-        return {
-          ...prev,
-          [source.heading]: sourceList,
-          [dest.heading]: destList,
-        };
-      }
+      const [moved] = sourceList.splice(source.idx, 1);
+      destList.splice(dest.idx, 0, moved);
+
+      return {
+        ...prev,
+        [source.heading]: sourceList,
+        [dest.heading]: destList,
+      };
     });
 
     dragItem.current = null;
@@ -71,17 +62,18 @@ const DragAndDrop = ({ data: intialData }) => {
 
   return (
     <div style={style.root}>
-      {mainHeadings.map((heading) => (
-        <div key={heading} style={style.column} onDrop={handleDrop}>
+      {Object.keys(data).map((heading) => (
+        <div key={heading} style={style.column}>
           <div style={style.columnHeader}>
             {heading.replace("_", " ")}
-            <span style={style.count}>{data[heading].length}</span>
+            <span>{data[heading].length}</span>
           </div>
 
-          {/* 🔥 THIS IS THE KEY FIX */}
+          {/* ✅ SAME ELEMENT HANDLES dragOver + drop */}
           <div
             style={style.taskList}
-            onDragOver={(e) => handleDragOverList(e, heading)}
+            onDragOver={(e) => handleListDragOver(e, heading)}
+            onDrop={handleDrop}
           >
             {data[heading].map((task, idx) => (
               <div
@@ -90,15 +82,15 @@ const DragAndDrop = ({ data: intialData }) => {
                 style={style.task}
                 onDragStart={(e) => handleStartDrag(e, task, heading, idx)}
                 onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleDragOverTask(e, idx, heading)}
+                onDragOver={(e) => handleTaskDragOver(e, heading, idx)}
               >
-                <p style={style.taskTitle}>{task.title}</p>
+                {task.title}
               </div>
             ))}
 
-            {/* empty-state drop zone */}
+            {/* Optional empty hint */}
             {data[heading].length === 0 && (
-              <div style={style.emptyHint}>Drop tasks here</div>
+              <div style={style.empty}>Drop task here</div>
             )}
           </div>
         </div>
@@ -109,62 +101,51 @@ const DragAndDrop = ({ data: intialData }) => {
 
 export default DragAndDrop;
 
-/* ================= Styles ================= */
+/* ---------------- Styles ---------------- */
 
 const style = {
   root: {
-    minHeight: "100vh",
     display: "flex",
-    gap: "24px",
-    padding: "32px",
+    gap: "20px",
+    padding: "30px",
     background: "#020617",
+    minHeight: "100vh",
   },
 
   column: {
     flex: 1,
-    background: "rgba(255,255,255,0.07)",
-    borderRadius: "18px",
+    background: "#111827",
+    borderRadius: "16px",
     padding: "16px",
   },
 
   columnHeader: {
     display: "flex",
     justifyContent: "space-between",
-    color: "#e5e7eb",
+    color: "#fff",
     marginBottom: "12px",
   },
 
-  count: {
-    background: "#1f2937",
-    padding: "2px 10px",
-    borderRadius: "999px",
-  },
-
   taskList: {
-    minHeight: "80px", // 🔥 MUST EXIST
+    minHeight: "100px",
     display: "flex",
     flexDirection: "column",
-    gap: "12px",
+    gap: "10px",
   },
 
   task: {
-    background: "#111827",
-    borderRadius: "12px",
+    background: "#1f2937",
+    color: "#fff",
     padding: "12px",
+    borderRadius: "10px",
     cursor: "grab",
-    color: "#f9fafb",
   },
 
-  taskTitle: {
-    fontSize: "0.9rem",
-  },
-
-  emptyHint: {
-    color: "#64748b",
-    fontSize: "0.8rem",
+  empty: {
+    border: "1px dashed #475569",
+    color: "#94a3b8",
+    padding: "20px",
     textAlign: "center",
-    padding: "16px",
-    border: "1px dashed rgba(255,255,255,0.15)",
-    borderRadius: "12px",
+    borderRadius: "10px",
   },
 };

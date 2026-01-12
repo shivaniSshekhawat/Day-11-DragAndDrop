@@ -1,4 +1,48 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+/* ---------------- TASK CARD ---------------- */
+
+function Task({ id, title }) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: "linear-gradient(145deg, #111827, #020617)",
+    borderRadius: 14,
+    padding: 14,
+    cursor: "grab",
+    color: "#f9fafb",
+    boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <p style={{ marginBottom: 6 }}>{title}</p>
+      <span
+        style={{
+          fontSize: "0.7rem",
+          padding: "2px 10px",
+          borderRadius: 999,
+          background: "linear-gradient(90deg,#38bdf8,#6366f1)",
+        }}
+      >
+        TASK
+      </span>
+    </div>
+  );
+}
+
+/* ---------------- BOARD ---------------- */
 
 const DragAndDrop = ({ data: initialData }) => {
   const [data, setData] = useState(() => {
@@ -10,80 +54,79 @@ const DragAndDrop = ({ data: initialData }) => {
     localStorage.setItem("tasks-data", JSON.stringify(data));
   }, [data]);
 
-  const dragItem = useRef(null);
-  const dropTarget = useRef(null);
-
-  function onDragStart(task, heading, idx) {
-    dragItem.current = { task, heading, idx };
+  function findColumn(taskId) {
+    return Object.keys(data).find((col) =>
+      data[col].some((t) => t.id === taskId)
+    );
   }
 
-  function onDrop(heading, index) {
-    const source = dragItem.current;
-    if (!source) return;
+  function onDragEnd(event) {
+    const { active, over } = event;
+    if (!over) return;
+
+    const sourceCol = findColumn(active.id);
+    const destCol = over.data.current?.column;
+
+    if (!sourceCol || !destCol) return;
+
+    const sourceIndex = data[sourceCol].findIndex((t) => t.id === active.id);
+
+    const destIndex = over.data.current?.index ?? data[destCol].length; // 👈 0 if empty
 
     setData((prev) => {
-      const sourceList = [...prev[source.heading]];
-      const destList = [...prev[heading]];
+      const sourceItems = [...prev[sourceCol]];
+      const destItems =
+        sourceCol === destCol ? sourceItems : [...prev[destCol]];
 
-      const [moved] = sourceList.splice(source.idx, 1);
-      destList.splice(index, 0, moved);
+      const [moved] = sourceItems.splice(sourceIndex, 1);
+
+      if (sourceCol === destCol) {
+        return {
+          ...prev,
+          [sourceCol]: arrayMove(sourceItems, sourceIndex, destIndex),
+        };
+      }
+
+      destItems.splice(destIndex, 0, moved);
 
       return {
         ...prev,
-        [source.heading]: sourceList,
-        [heading]: destList,
+        [sourceCol]: sourceItems,
+        [destCol]: destItems,
       };
     });
-
-    dragItem.current = null;
   }
 
   return (
-    <div style={style.root}>
-      {Object.keys(data).map((heading) => (
-        <div key={heading} style={style.column}>
-          <div style={style.header}>
-            {heading.replace("_", " ")}
-            <span>{data[heading].length}</span>
-          </div>
+    <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <div style={style.root}>
+        {Object.keys(data).map((column) => (
+          <div key={column} style={style.column}>
+            <div style={style.header}>
+              {column.replace("_", " ")}
+              <span style={style.count}>{data[column].length}</span>
+            </div>
 
-          <div style={style.list}>
-            {data[heading].map((task, idx) => (
-              <div
-                key={task.id}
-                draggable
-                style={style.task}
-                onDragStart={() => onDragStart(task, heading, idx)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onDrop(heading, idx)}
-              >
-                {task.title}
+            <SortableContext
+              items={data[column].map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div style={style.list}>
+                {data[column].length === 0 && (
+                  <div style={style.empty}>Drop task here</div>
+                )}
+
+                {data[column].map((task, index) => (
+                  <div key={task.id} data-column={column} data-index={index}>
+                    <Task id={task.id} title={task.title} />
+                  </div>
+                ))}
               </div>
-            ))}
-
-            {/* 🔥 REAL DROP ZONE FOR EMPTY LIST */}
-            {data[heading].length === 0 && (
-              <div
-                style={style.emptyDrop}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onDrop(heading, 0)} // ✅ 0th index
-              >
-                Drop here
-              </div>
-            )}
-
-            {/* 🔥 DROP AT BOTTOM */}
-            {data[heading].length > 0 && (
-              <div
-                style={style.bottomDrop}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onDrop(heading, data[heading].length)}
-              />
-            )}
+            </SortableContext>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </DndContext>
   );
 };
 
@@ -93,46 +136,50 @@ export default DragAndDrop;
 
 const style = {
   root: {
-    display: "flex",
-    gap: 20,
-    padding: 30,
-    background: "#020617",
     minHeight: "100vh",
+    display: "flex",
+    gap: 24,
+    padding: 32,
+    background: "linear-gradient(135deg,#0f172a,#020617)",
   },
+
   column: {
     flex: 1,
-    background: "#0f172a",
-    borderRadius: 16,
+    background: "rgba(255,255,255,0.07)",
+    borderRadius: 18,
     padding: 16,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.45)",
   },
+
   header: {
     display: "flex",
     justifyContent: "space-between",
-    color: "#fff",
+    color: "#e5e7eb",
+    fontSize: "0.85rem",
+    fontWeight: 600,
     marginBottom: 12,
   },
+
+  count: {
+    background: "rgba(255,215,0,0.15)",
+    color: "#FFD700",
+    padding: "2px 10px",
+    borderRadius: 999,
+    fontSize: "0.7rem",
+  },
+
   list: {
     display: "flex",
     flexDirection: "column",
     gap: 12,
+    minHeight: 120,
   },
-  task: {
-    background: "#1f2937",
-    color: "#fff",
-    padding: 14,
-    borderRadius: 12,
-    cursor: "grab",
-  },
-  emptyDrop: {
-    height: 80,
+
+  empty: {
     border: "2px dashed #475569",
-    borderRadius: 12,
     color: "#94a3b8",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bottomDrop: {
-    height: 12,
+    padding: 20,
+    textAlign: "center",
+    borderRadius: 12,
   },
 };

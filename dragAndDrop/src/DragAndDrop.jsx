@@ -69,11 +69,16 @@ const DragAndDrop = ({ data: intialData }) => {
             <span>{data[heading].length}</span>
           </div>
 
-          {/* ✅ SAME ELEMENT HANDLES dragOver + drop */}
           <div
             style={style.taskList}
-            onDragOver={(e) => handleListDragOver(e, heading)}
-            onDrop={handleDrop}
+            onDragOver={(e) => {
+              e.preventDefault(); // 🔥 REQUIRED
+              dragOverItem.current = {
+                heading,
+                idx: data[heading].length, // 0 if empty
+              };
+            }}
+            onDrop={handleDrop} // 🔥 SAME ELEMENT
           >
             {data[heading].map((task, idx) => (
               <div
@@ -82,13 +87,15 @@ const DragAndDrop = ({ data: intialData }) => {
                 style={style.task}
                 onDragStart={(e) => handleStartDrag(e, task, heading, idx)}
                 onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleTaskDragOver(e, heading, idx)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  dragOverItem.current = { heading, idx };
+                }}
               >
                 {task.title}
               </div>
             ))}
 
-            {/* Optional empty hint */}
             {data[heading].length === 0 && (
               <div style={style.empty}>Drop task here</div>
             )}

@@ -14,6 +14,7 @@ const DragAndDrop = ({ data: intialData }) => {
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
+  const currentColumn = useRef(null); // ✅ NEW
 
   function handleStartDrag(e, task, heading, idx) {
     e.target.style.opacity = 0.6;
@@ -30,6 +31,14 @@ const DragAndDrop = ({ data: intialData }) => {
     dragOverItem.current = { idx, heading };
   }
 
+  function handleColumnEnter(heading) {
+    currentColumn.current = heading;
+    dragOverItem.current = {
+      heading,
+      idx: data[heading].length, // 👈 drop to end if empty
+    };
+  }
+
   function handleDragOver(e) {
     e.preventDefault();
   }
@@ -37,6 +46,7 @@ const DragAndDrop = ({ data: intialData }) => {
   function handleDrop() {
     const source = dragItem.current;
     const dest = dragOverItem.current;
+
     if (!source || !dest) return;
 
     setData((pre) => {
@@ -68,6 +78,7 @@ const DragAndDrop = ({ data: intialData }) => {
 
     dragItem.current = null;
     dragOverItem.current = null;
+    currentColumn.current = null;
   }
 
   const columnColors = {
@@ -90,6 +101,7 @@ const DragAndDrop = ({ data: intialData }) => {
               borderTop: `4px solid ${columnColors[heading]}`,
             }}
             onDragOver={handleDragOver}
+            onDragEnter={() => handleColumnEnter(heading)} // ✅ KEY FIX
             onDrop={handleDrop}
           >
             <div style={style.columnHeader}>
@@ -97,17 +109,7 @@ const DragAndDrop = ({ data: intialData }) => {
               <span style={style.count}>{data[heading].length}</span>
             </div>
 
-            {/* 👇 THIS IS THE KEY FIX */}
-            <div
-              style={style.taskList}
-              onDragEnter={() =>
-                handleDragEnter(
-                  null,
-                  data[heading].length, // allows empty & bottom drop
-                  heading
-                )
-              }
-            >
+            <div style={style.taskList}>
               {data[heading].map((task, idx) => (
                 <div
                   key={task.id}
@@ -116,16 +118,6 @@ const DragAndDrop = ({ data: intialData }) => {
                   onDragStart={(e) => handleStartDrag(e, task, heading, idx)}
                   onDragEnd={handleDragEnd}
                   onDragEnter={() => handleDragEnter(null, idx, heading)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform =
-                      "translateY(-3px) scale(1.02)";
-                    e.currentTarget.style.boxShadow =
-                      "0 20px 40px rgba(56,189,248,0.35)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "none";
-                    e.currentTarget.style.boxShadow = style.task.boxShadow;
-                  }}
                 >
                   <p style={style.taskTitle}>{task.title}</p>
                   <span style={style.taskTag}>TASK</span>
@@ -141,7 +133,7 @@ const DragAndDrop = ({ data: intialData }) => {
 
 export default DragAndDrop;
 
-/* =================== Animations =================== */
+/* ================= Animations ================= */
 
 const popAnimation = {
   animation: "popIn 0.35s ease forwards",
@@ -149,18 +141,12 @@ const popAnimation = {
 
 const globalStyles = `
 @keyframes popIn {
-  0% {
-    transform: scale(0.9);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 `;
 
-/* =================== Styles =================== */
+/* ================= Styles ================= */
 
 const style = {
   root: {
@@ -169,7 +155,6 @@ const style = {
     gap: "24px",
     padding: "32px",
     background: "linear-gradient(135deg, #0f172a, #020617)",
-    fontFamily: "'Inter', sans-serif",
   },
 
   column: {
@@ -184,12 +169,9 @@ const style = {
   columnHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
     color: "#e5e7eb",
     fontSize: "0.85rem",
     fontWeight: 600,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
     paddingBottom: "12px",
     borderBottom: "1px solid rgba(255,255,255,0.1)",
   },
@@ -207,7 +189,7 @@ const style = {
     display: "flex",
     flexDirection: "column",
     gap: "12px",
-    minHeight: "40px", // 👈 allows dropping into empty column
+    minHeight: "60px", // ✅ ensures empty column is droppable
   },
 
   task: {
@@ -216,14 +198,11 @@ const style = {
     padding: "14px",
     cursor: "grab",
     boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
-    transition: "all 0.25s ease",
   },
 
   taskTitle: {
     color: "#f9fafb",
     fontSize: "0.9rem",
-    fontWeight: 500,
-    marginBottom: "6px",
   },
 
   taskTag: {
@@ -232,6 +211,5 @@ const style = {
     background: "linear-gradient(90deg, #38bdf8, #6366f1)",
     padding: "2px 10px",
     borderRadius: "999px",
-    width: "fit-content",
   },
 };
